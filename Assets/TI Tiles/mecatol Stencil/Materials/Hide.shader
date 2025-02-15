@@ -6,18 +6,18 @@
         Tags {"Queue"="Geometry-1"}      
         LOD 100
         // Blend Zero One
-        ZWrite off
-        ColorMask 0
-        Pass
-        {   
-            Blend Zero One
-            ZWrite Off
-        }
+        // ZWrite off
+        // ColorMask 0
+        // Pass
+        // {   
+        //     Blend Zero One
+        //     ZWrite Off
+        // }
         Pass
         {   
             Stencil
             {
-                Ref 1 
+                Ref 100
                 Comp always
                 Pass Replace               
             }
