@@ -1,15 +1,17 @@
 ﻿Shader "Stencil/Invisible Mask"
 {
-    Properties {}
+    Properties {
+        _StencilRef("Stencil Ref", Float) = 100
+    }
     SubShader
     {
-        Tags {"Queue"="Geometry-1"}      
+        Tags {"Queue"="Geometry-3"}      
         LOD 100
         Pass
         {   
             Stencil
             {
-                Ref 100
+                Ref [_StencilRef]
                 Comp always
                 Pass Replace               
             }

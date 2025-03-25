@@ -9,16 +9,17 @@
 
         [Enum(UnityEngine.Rendering.CompareFunction)]
         _StencilComp("Stencil Comp",Float) = 8
+        [int] _StencilRef("Stencil Ref", Float) = 100
     }
     SubShader
     {
         ZWrite Off
-        Tags { "RenderType"="Opaque" "Queue"="Geometry-1" }
+        Tags { "RenderType"="Opaque" "Queue"="Geometry-2" }
         LOD 200
 
         Stencil
         {
-            Ref 100
+            Ref [_StencilRef]
             Comp [_StencilComp]
         }
         Ztest Always
