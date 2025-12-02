@@ -6,7 +6,9 @@ Shader "Custom/BasicParallax"
         _MainTex ("Sprite", 2D) = "white" {}
         _ParallaxTwo("Parallax Depth 2", Range(0,10)) = 0.0
         _MainTexBrightness("Main Texture Brightness", Range(0,2)) = 1.0
-        _OtherBrightness("Other Textures Brightness", Range(0,2)) = 1.0
+        // _OtherBrightness("Other Textures Brightness", Range(0,2)) = 1.0
+        _BackTexBrightness("Back Texture Brightness", Range(0,2)) = 1.0
+        _ForegroundTexBrightness("Foreground Texture Brightness", Range(0,2)) = 1.0
         _BackTex ("Back Sprite", 2D) = "white" {}
         _SpriteScale ("Sprite Scale", Float) = 1.0
             _BackSpriteScale ("Back Sprite Scale", Float) = 1.0
@@ -47,7 +49,9 @@ Shader "Custom/BasicParallax"
         float _ForegroundOpacity;
 
         float _MainTexBrightness;
-        float _OtherBrightness;
+        // float _OtherBrightness;
+        float _BackTexBrightness;
+        float _ForegroundTexBrightness;
 
         struct Input
         {
@@ -77,11 +81,11 @@ Shader "Custom/BasicParallax"
         UNITY_INSTANCING_BUFFER_END(Props)
 
         // Composite foreground (top) over front (middle) over back (base), with control over top/back opacities.
-        fixed4 CompositeColors(fixed4 frontCol, fixed4 backCol, float backOpacity, fixed4 foreCol, float foreOpacity)
+        fixed4 CompositeColors(fixed4 myImage, fixed4 backCol, float backOpacity, fixed4 foreCol, float foreOpacity)
         {
             // Respect the provided opacity sliders and texture alpha channels
             float backA = backCol.a * backOpacity;
-            float frontA = frontCol.a;
+            float frontA = myImage.a;
             float foreA = foreCol.a * foreOpacity;
 
             // Composite front over back
@@ -89,7 +93,7 @@ Shader "Custom/BasicParallax"
             float3 midRGB = float3(0,0,0);
             if (midA > 0.0001)
             {
-                midRGB = (frontCol.rgb * frontA + backCol.rgb * backA * (1 - frontA)) / midA;
+                midRGB = (myImage.rgb * frontA + backCol.rgb * backA * (1 - frontA)) / midA;
             }
 
             // Composite fore over the result
@@ -101,6 +105,33 @@ Shader "Custom/BasicParallax"
             }
 
             return fixed4(outRGB, outA);
+        }
+        float4 BooleanIntersect(float4 colorA, float4 colorB)
+        {
+            float alphaA = colorA.a;
+            float alphaB = colorB.a;
+            float outA = alphaA * alphaB;
+            float3 outRGB = float3(0,0,0);
+            if (outA > 0.0001)
+            {
+                outRGB = (colorA.rgb * alphaA * colorB.rgb * alphaB) / outA;
+            }
+            return float4(outRGB, outA);
+        }
+        fixed4 waveEffect(fixed4 image, float time, float3 viewDir)
+        {
+            // float wave = sin(dot(viewDir, float3(0,0,1))*5 );//+ time * 5);
+            float wave = sin(viewDir.x * 10 + time * 5);
+            fixed4 result = image;
+            result.r += wave * 0.1;
+            return result;
+        }
+        fixed4 holographicEffect(fixed4 image, Input IN)
+        {
+            // float rainbow = 
+            fixed4 result = image;
+            // result.r += rainbow * 0.1;
+            return result;
         }
 
         void surf (Input IN, inout SurfaceOutputStandard o)
@@ -115,7 +146,7 @@ Shader "Custom/BasicParallax"
             o.Normal = normalize(float3(0, 0, 1));
             // Albedo comes from a texture tinted by color
             float2 parallaxtwo = ParallaxOffset(d, _ParallaxTwo, IN.viewDir);
-            fixed4 frontCol = tex2D (_MainTex, IN.uv_MainTex*_SpriteScale + parallaxtwo) * _Color;
+            fixed4 myImage = tex2D (_MainTex, IN.uv_MainTex*_SpriteScale + parallaxtwo) * _Color;
 
             // Back texture parallax and sample
             float2 parallaxBack = ParallaxOffset(d, _BackParallax, IN.viewDir);
@@ -126,10 +157,18 @@ Shader "Custom/BasicParallax"
             fixed4 foreCol = tex2D(_ForegroundTex, IN.uv_ForegroundTex * _ForegroundSpriteScale + parallaxFore);
 
             // Composite fore (top) over front over back using opacities and alphas
-            fixed4 result = CompositeColors(frontCol, backCol, _BackOpacity, foreCol, _ForegroundOpacity);
+            fixed4 result = CompositeColors(myImage, backCol, _BackOpacity, foreCol, _ForegroundOpacity);
 
-            o.Albedo = result.rgb;
-            o.Emission = frontCol.rgb * frontCol.a * _MainTexBrightness + result.rgb * (1 - frontCol.a) * _OtherBrightness;
+            o.Albedo = holographicEffect(result, IN).rgb;
+            // vec3 myImageEmission = myImage.rgb * myImage.a * _MainTexBrightness;
+            // vec3 backEmission = min(backCol.rgb * backCol.a * _BackTexBrightness, myImageEmission);
+            // vec3 foreEmission = foreCol.rgb * foreCol.a * _ForegroundTexBrightness, backEmission;
+            o.Emission = myImage.rgb * myImage.a * _MainTexBrightness;
+            // o.Emission += min(backCol.rgb * backCol.a * _BackTexBrightness, o.Emission);
+            o.Emission.r = max(o.Emission.r, backCol.r * backCol.a * _BackTexBrightness); //This is scuffed, please fix later.
+            o.Emission.g = max(o.Emission.g, backCol.g * backCol.a * _BackTexBrightness);
+            o.Emission.b = max(o.Emission.b, backCol.b * backCol.a * _BackTexBrightness);
+            o.Emission += foreCol.rgb * foreCol.a * _ForegroundTexBrightness; 
             // Metallic and smoothness come from slider variables
             o.Metallic = _Metallic;
             o.Smoothness = _Glossiness;
