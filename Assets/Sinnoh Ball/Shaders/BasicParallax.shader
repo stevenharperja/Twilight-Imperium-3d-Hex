@@ -5,10 +5,10 @@ Shader "Custom/BasicParallax"
         _Color ("Color", Color) = (1,1,1,1)
         _MainTex ("Sprite", 2D) = "white" {}
         _ParallaxTwo("Parallax Depth 2", Range(0,10)) = 0.0
-        _MainTexBrightness("Main Texture Brightness", Range(0,2)) = 1.0
+        _MainTexBrightness("Main Texture Brightness", Range(-2,2)) = 1.0
         // _OtherBrightness("Other Textures Brightness", Range(0,2)) = 1.0
-        _BackTexBrightness("Back Texture Brightness", Range(0,2)) = 1.0
-        _ForegroundTexBrightness("Foreground Texture Brightness", Range(0,2)) = 1.0
+        _BackTexBrightness("Back Texture Brightness", Range(-2,2)) = 1.0
+        _ForegroundTexBrightness("Foreground Texture Brightness", Range(-2,2)) = 1.0
         _BackTex ("Back Sprite", 2D) = "white" {}
         _SpriteScale ("Sprite Scale", Float) = 1.0
             _BackSpriteScale ("Back Sprite Scale", Float) = 1.0
@@ -165,7 +165,7 @@ Shader "Custom/BasicParallax"
             // vec3 foreEmission = foreCol.rgb * foreCol.a * _ForegroundTexBrightness, backEmission;
             o.Emission = myImage.rgb * myImage.a * _MainTexBrightness;
             // o.Emission += min(backCol.rgb * backCol.a * _BackTexBrightness, o.Emission);
-            o.Emission.r = max(o.Emission.r, backCol.r * backCol.a * _BackTexBrightness); //This is scuffed, please fix later.
+            o.Emission.r = max(o.Emission.r, backCol.r * backCol.a * _BackTexBrightness); //This is scuffed, please fix later. adapt that composite function
             o.Emission.g = max(o.Emission.g, backCol.g * backCol.a * _BackTexBrightness);
             o.Emission.b = max(o.Emission.b, backCol.b * backCol.a * _BackTexBrightness);
             o.Emission += foreCol.rgb * foreCol.a * _ForegroundTexBrightness; 
