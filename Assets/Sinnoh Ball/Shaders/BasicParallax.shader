@@ -21,6 +21,8 @@ Shader "Custom/BasicParallax"
         _Glossiness ("Smoothness", Range(0,1)) = 0.5
         _Metallic ("Metallic", Range(0,1)) = 0.0
 		_DepthMap("DepthMap", 2D) = "grey" {}
+        _DepthEffectScale("Depth Effect Scale", Range(-2,2)) = 1
+        _DepthSpriteScale("Depth Sprite Scale", Float) = 1.0
 		_Normal("Normal", 2D) = "bump" {}
 		_Parallax("Parallax Depth", Range(0,10)) = 0.0
         
@@ -58,6 +60,7 @@ Shader "Custom/BasicParallax"
             float2 uv_MainTex;
             float2 uv_BackTex;
             float2 uv_ForegroundTex;
+            float2 uv_DepthMap;
 			float2 uv_Normal;
 			float3 viewDir;
         };
@@ -72,6 +75,8 @@ Shader "Custom/BasicParallax"
         float _BackParallax;
         float _ForegroundParallax;
 		sampler2D _DepthMap, _Normal;
+        float _DepthEffectScale;
+        float _DepthSpriteScale;
 
         // Add instancing support for this shader. You need to check 'Enable Instancing' on materials that use the shader.
         // See https://docs.unity3d.com/Manual/GPUInstancing.html for more information about instancing.
@@ -136,9 +141,10 @@ Shader "Custom/BasicParallax"
 
         void surf (Input IN, inout SurfaceOutputStandard o)
         {
-			// depth map for parallax	
-			// float d = tex2D(_DepthMap, IN.uv_MainTex).r;
-            float d = 0;
+            // depth map for parallax
+            // Use the depth map's own UVs (`uv_DepthMap`) so material Tiling/Offset on the DepthMap property applies.
+            float d = tex2D(_DepthMap, IN.uv_DepthMap * _DepthSpriteScale).a * _DepthEffectScale;
+            // float d = 0;
 
 			float2 parallax = ParallaxOffset(d, _Parallax, IN.viewDir);
             
@@ -159,7 +165,7 @@ Shader "Custom/BasicParallax"
             // Composite fore (top) over front over back using opacities and alphas
             fixed4 result = CompositeColors(myImage, backCol, _BackOpacity, foreCol, _ForegroundOpacity);
 
-            o.Albedo = holographicEffect(result, IN).rgb;
+            o.Albedo = result.rgb;
             // vec3 myImageEmission = myImage.rgb * myImage.a * _MainTexBrightness;
             // vec3 backEmission = min(backCol.rgb * backCol.a * _BackTexBrightness, myImageEmission);
             // vec3 foreEmission = foreCol.rgb * foreCol.a * _ForegroundTexBrightness, backEmission;
