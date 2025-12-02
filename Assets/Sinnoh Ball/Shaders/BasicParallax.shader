@@ -24,6 +24,8 @@ Shader "Custom/BasicParallax"
         _DepthEffectScale("Depth Effect Scale", Range(-2,2)) = 1
         _DepthSpriteScale("Depth Sprite Scale", Float) = 1.0
 		_Normal("Normal", 2D) = "bump" {}
+        _NormalSpriteScale("Normal Sprite Scale", Float) = 1.0
+        _NormalIntensity("Normal Intensity", Float) = 1.0
 		_Parallax("Parallax Depth", Range(0,10)) = 0.0
         
     }
@@ -77,6 +79,8 @@ Shader "Custom/BasicParallax"
 		sampler2D _DepthMap, _Normal;
         float _DepthEffectScale;
         float _DepthSpriteScale;
+        float _NormalSpriteScale;
+        float _NormalIntensity = 1.0;
 
         // Add instancing support for this shader. You need to check 'Enable Instancing' on materials that use the shader.
         // See https://docs.unity3d.com/Manual/GPUInstancing.html for more information about instancing.
@@ -148,8 +152,9 @@ Shader "Custom/BasicParallax"
 
 			float2 parallax = ParallaxOffset(d, _Parallax, IN.viewDir);
             
-			// o.Normal = UnpackNormal(tex2D(_Normal, IN.uv_Normal));
-            o.Normal = normalize(float3(0, 0, 1));
+			o.Normal = UnpackNormal(tex2D(_Normal, IN.uv_Normal * _NormalSpriteScale + parallax));
+            o.Normal = normalize(lerp(float3(0,0,1), o.Normal, _NormalIntensity));
+            // o.Normal = normalize(float3(0, 0, 1));
             // Albedo comes from a texture tinted by color
             float2 parallaxtwo = ParallaxOffset(d, _ParallaxTwo, IN.viewDir);
             fixed4 myImage = tex2D (_MainTex, IN.uv_MainTex*_SpriteScale + parallaxtwo) * _Color;
