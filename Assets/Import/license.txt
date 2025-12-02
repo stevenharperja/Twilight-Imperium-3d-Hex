@@ -1,0 +1,11 @@
+Model Information:
+* title:	New thin barrel
+* source:	https://sketchfab.com/3d-models/new-thin-barrel-88b78b63a6b94015a07eb24afe58a807
+* author:	3dhdscan (https://sketchfab.com/3dhdscan)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "New thin barrel" (https://sketchfab.com/3d-models/new-thin-barrel-88b78b63a6b94015a07eb24afe58a807) by 3dhdscan (https://sketchfab.com/3dhdscan) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
