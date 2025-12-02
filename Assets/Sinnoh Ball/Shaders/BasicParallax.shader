@@ -4,17 +4,23 @@ Shader "Custom/BasicParallax"
     {
         _Color ("Color", Color) = (1,1,1,1)
         _MainTex ("Sprite", 2D) = "white" {}
+        _ParallaxTwo("Parallax Depth 2", Range(0,10)) = 0.0
+        _MainTexBrightness("Main Texture Brightness", Range(0,2)) = 1.0
+        _OtherBrightness("Other Textures Brightness", Range(0,2)) = 1.0
         _BackTex ("Back Sprite", 2D) = "white" {}
         _SpriteScale ("Sprite Scale", Float) = 1.0
             _BackSpriteScale ("Back Sprite Scale", Float) = 1.0
             _BackOpacity ("Back Opacity", Range(0,1)) = 1.0
             _BackParallax ("Back Parallax", Range(0,10)) = 0.0
+        _ForegroundTex ("Foreground Sprite", 2D) = "white" {}
+            _ForegroundSpriteScale ("Foreground Sprite Scale", Float) = 1.0
+            _ForegroundOpacity ("Foreground Opacity", Range(0,1)) = 1.0
+            _ForegroundParallax ("Foreground Parallax", Range(0,10)) = 0.0
         _Glossiness ("Smoothness", Range(0,1)) = 0.5
         _Metallic ("Metallic", Range(0,1)) = 0.0
 		_DepthMap("DepthMap", 2D) = "grey" {}
 		_Normal("Normal", 2D) = "bump" {}
 		_Parallax("Parallax Depth", Range(0,10)) = 0.0
-        _ParallaxTwo("Parallax Depth 2", Range(0,10)) = 0.0
         
     }
     SubShader
@@ -36,11 +42,18 @@ Shader "Custom/BasicParallax"
         sampler2D _BackTex;
         float _BackSpriteScale;
         float _BackOpacity;
+        sampler2D _ForegroundTex;
+        float _ForegroundSpriteScale;
+        float _ForegroundOpacity;
+
+        float _MainTexBrightness;
+        float _OtherBrightness;
 
         struct Input
         {
             float2 uv_MainTex;
             float2 uv_BackTex;
+            float2 uv_ForegroundTex;
 			float2 uv_Normal;
 			float3 viewDir;
         };
@@ -53,6 +66,7 @@ Shader "Custom/BasicParallax"
         float _ParallaxTwo;
         // Parallax amount for the back texture, can be smaller or larger depending on desired depth
         float _BackParallax;
+        float _ForegroundParallax;
 		sampler2D _DepthMap, _Normal;
 
         // Add instancing support for this shader. You need to check 'Enable Instancing' on materials that use the shader.
@@ -61,6 +75,33 @@ Shader "Custom/BasicParallax"
         UNITY_INSTANCING_BUFFER_START(Props)
             // put more per-instance properties here
         UNITY_INSTANCING_BUFFER_END(Props)
+
+        // Composite foreground (top) over front (middle) over back (base), with control over top/back opacities.
+        fixed4 CompositeColors(fixed4 frontCol, fixed4 backCol, float backOpacity, fixed4 foreCol, float foreOpacity)
+        {
+            // Respect the provided opacity sliders and texture alpha channels
+            float backA = backCol.a * backOpacity;
+            float frontA = frontCol.a;
+            float foreA = foreCol.a * foreOpacity;
+
+            // Composite front over back
+            float midA = frontA + backA * (1 - frontA);
+            float3 midRGB = float3(0,0,0);
+            if (midA > 0.0001)
+            {
+                midRGB = (frontCol.rgb * frontA + backCol.rgb * backA * (1 - frontA)) / midA;
+            }
+
+            // Composite fore over the result
+            float outA = foreA + midA * (1 - foreA);
+            float3 outRGB = float3(0,0,0);
+            if (outA > 0.0001)
+            {
+                outRGB = (foreCol.rgb * foreA + midRGB * midA * (1 - foreA)) / outA;
+            }
+
+            return fixed4(outRGB, outA);
+        }
 
         void surf (Input IN, inout SurfaceOutputStandard o)
         {
@@ -80,20 +121,15 @@ Shader "Custom/BasicParallax"
             float2 parallaxBack = ParallaxOffset(d, _BackParallax, IN.viewDir);
             fixed4 backCol = tex2D(_BackTex, IN.uv_BackTex * _BackSpriteScale + parallaxBack);
 
-            // Composite front over back using front alpha; respect back opacity.
-            float frontA = frontCol.a;
-            float backA = backCol.a * _BackOpacity;
-            float outA = frontA + backA * (1 - frontA);
+            // Foreground texture parallax and sample
+            float2 parallaxFore = ParallaxOffset(d, _ForegroundParallax, IN.viewDir);
+            fixed4 foreCol = tex2D(_ForegroundTex, IN.uv_ForegroundTex * _ForegroundSpriteScale + parallaxFore);
 
-            float3 outRGB = float3(0,0,0);
-            if (outA > 0.0001)
-            {
-                outRGB = (frontCol.rgb * frontA + backCol.rgb * backA * (1 - frontA)) / outA;
-            }
-
-            fixed4 result = fixed4(outRGB, outA);
+            // Composite fore (top) over front over back using opacities and alphas
+            fixed4 result = CompositeColors(frontCol, backCol, _BackOpacity, foreCol, _ForegroundOpacity);
 
             o.Albedo = result.rgb;
+            o.Emission = frontCol.rgb * frontCol.a * _MainTexBrightness + result.rgb * (1 - frontCol.a) * _OtherBrightness;
             // Metallic and smoothness come from slider variables
             o.Metallic = _Metallic;
             o.Smoothness = _Glossiness;
