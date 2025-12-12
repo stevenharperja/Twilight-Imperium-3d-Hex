@@ -3,9 +3,11 @@ Shader "Custom/BasicParallax"
     Properties
     {
         _Color ("Color", Color) = (1,1,1,1)
-        _MainTex ("Sprite", 2D) = "white" {}
+        _MainTex("Front Image", 2D) = "white" {}
+        _FrontImageBrightness("Front Image Brightness", Range(-2,2)) = 1.0
+        _Subject ("Sprite", 2D) = "white" {}
         _ParallaxTwo("Parallax Depth 2", Range(0,10)) = 0.0
-        _MainTexBrightness("Main Texture Brightness", Range(-2,2)) = 1.0
+        _SubjectBrightness("Main Texture Brightness", Range(-2,2)) = 1.0
         // _OtherBrightness("Other Textures Brightness", Range(0,2)) = 1.0
         _BackTexBrightness("Back Texture Brightness", Range(-2,2)) = 1.0
         _ForegroundTexBrightness("Foreground Texture Brightness", Range(-2,2)) = 1.0
@@ -27,7 +29,6 @@ Shader "Custom/BasicParallax"
         _NormalSpriteScale("Normal Sprite Scale", Float) = 1.0
         _NormalIntensity("Normal Intensity", Float) = 1.0
 		_Parallax("Parallax Depth", Range(0,10)) = 0.0
-        
     }
     SubShader
     {
@@ -43,7 +44,7 @@ Shader "Custom/BasicParallax"
         // Use shader model 3.0 target, to get nicer looking lighting
         #pragma target 3.0
 
-        sampler2D _MainTex;
+        sampler2D _Subject;
         float _SpriteScale;
         sampler2D _BackTex;
         float _BackSpriteScale;
@@ -52,18 +53,21 @@ Shader "Custom/BasicParallax"
         float _ForegroundSpriteScale;
         float _ForegroundOpacity;
 
-        float _MainTexBrightness;
+        float _SubjectBrightness;
         // float _OtherBrightness;
         float _BackTexBrightness;
         float _ForegroundTexBrightness;
 
+        sampler2D _MainTex;
+
         struct Input
         {
-            float2 uv_MainTex;
+            float2 uv_Subject;
             float2 uv_BackTex;
             float2 uv_ForegroundTex;
             float2 uv_DepthMap;
 			float2 uv_Normal;
+            float2 uv_MainTex;
 			float3 viewDir;
         };
 
@@ -81,6 +85,7 @@ Shader "Custom/BasicParallax"
         float _DepthSpriteScale;
         float _NormalSpriteScale;
         float _NormalIntensity = 1.0;
+        float _FrontImageBrightness;
 
         // Add instancing support for this shader. You need to check 'Enable Instancing' on materials that use the shader.
         // See https://docs.unity3d.com/Manual/GPUInstancing.html for more information about instancing.
@@ -135,16 +140,67 @@ Shader "Custom/BasicParallax"
             result.r += wave * 0.1;
             return result;
         }
-        fixed4 holographicEffect(fixed4 image, Input IN)
+        fixed4 holographicEffect(fixed4 image, Input IN, float frequency = 10.0, float amplitude = 0.1)
         {
-            // float rainbow = 
+            //See if I can use the info from here: https://www.cyanilux.com/tutorials/holofoil-card-shader-breakdown/
+            //get the view direction
+            float3 viewDir = normalize(IN.viewDir);
+            //calculate a holographic color shift based on view direction
+            float shift = dot(viewDir, float3(1,1,1));
+            //filter the shift through a high frequency sine wave for a holographic effect
+            float Rshift = sin(shift * frequency) * amplitude;
+            float Gshift = sin((shift + 0.33*2*3.14) * frequency) * amplitude;
+            float Bshift = sin((shift + 0.66*2*3.14) * frequency) * amplitude;
+            // float shift2 = dot(In.)
+            image.r += Rshift;
+            image.g += Gshift;
+            image.b += Bshift;
             fixed4 result = image;
-            // result.r += rainbow * 0.1;
             return result;
         }
+        fixed4 DrawAoverB(fixed4 ACol, float AOpacity, fixed4 BCol, float BOpacity)
+        {
+            // Standard "A over B" compositing with opacity controls
+            float aAlpha = ACol.a * AOpacity;
+            float bAlpha = BCol.a * BOpacity;
 
+            // Composite A over B: outA = aA + bA * (1 - aA)
+            float outA = aAlpha + bAlpha * (1 - aAlpha);
+            float3 outRGB = float3(0,0,0);
+            if (outA > 0.0001)
+            {
+                // RGB: blend A and B using their final alphas
+                outRGB = (ACol.rgb * aAlpha + BCol.rgb * bAlpha * (1 - aAlpha)) / outA;
+            }
+            return fixed4(outRGB, outA);
+        }
+        fixed3 DrawEmissionAoverB(fixed3 emissionA, float Apercent, fixed3 emissionB, float Bpercent)
+        {
+            // Similar to DrawAoverB but for emission values (no alpha channel)
+            fixed3 outEmission = emissionA * Apercent + emissionB * Bpercent * (1 - Apercent);
+            //pass B through where A is 0.
+            if (emissionA.r < 0.0001 && emissionA.g < 0.0001 && emissionA.b < 0.0001)
+            {
+                outEmission = emissionB * Bpercent;
+            }
+            return outEmission;
+        }
+
+        void stretchVertically(inout float2 uv, float stretchAmount)
+        {
+            uv.y *= stretchAmount;
+        }
         void surf (Input IN, inout SurfaceOutputStandard o)
         {
+            ////FIX UVS
+            //magic number because all the pokemon cards are the same size
+            float stretch = 1.75;
+            stretchVertically(IN.uv_Subject, stretch);
+            stretchVertically(IN.uv_BackTex, stretch);
+            stretchVertically(IN.uv_ForegroundTex, stretch);
+            stretchVertically(IN.uv_DepthMap, stretch);
+            stretchVertically(IN.uv_Normal, stretch);
+            //// END OF FIX UVS
             // depth map for parallax
             // Use the depth map's own UVs (`uv_DepthMap`) so material Tiling/Offset on the DepthMap property applies.
             float d = tex2D(_DepthMap, IN.uv_DepthMap * _DepthSpriteScale).a * _DepthEffectScale;
@@ -157,7 +213,8 @@ Shader "Custom/BasicParallax"
             // o.Normal = normalize(float3(0, 0, 1));
             // Albedo comes from a texture tinted by color
             float2 parallaxtwo = ParallaxOffset(d, _ParallaxTwo, IN.viewDir);
-            fixed4 myImage = tex2D (_MainTex, IN.uv_MainTex*_SpriteScale + parallaxtwo) * _Color;
+            fixed4 myImage = tex2D (_Subject, IN.uv_Subject*_SpriteScale + parallaxtwo) * _Color;
+            myImage = holographicEffect(myImage, IN, 10.0, 0.05);
 
             // Back texture parallax and sample
             float2 parallaxBack = ParallaxOffset(d, _BackParallax, IN.viewDir);
@@ -166,20 +223,32 @@ Shader "Custom/BasicParallax"
             // Foreground texture parallax and sample
             float2 parallaxFore = ParallaxOffset(d, _ForegroundParallax, IN.viewDir);
             fixed4 foreCol = tex2D(_ForegroundTex, IN.uv_ForegroundTex * _ForegroundSpriteScale + parallaxFore);
+            foreCol = holographicEffect(foreCol, IN, 2.0, 0.5);
 
             // Composite fore (top) over front over back using opacities and alphas
             fixed4 result = CompositeColors(myImage, backCol, _BackOpacity, foreCol, _ForegroundOpacity);
+            fixed4 _MainTexCol = tex2D(_MainTex, IN.uv_MainTex);
+            result = DrawAoverB(_MainTexCol, 1.0, result, 1.0);
 
             o.Albedo = result.rgb;
-            // vec3 myImageEmission = myImage.rgb * myImage.a * _MainTexBrightness;
+            // vec3 myImageEmission = myImage.rgb * myImage.a * _SubjectBrightness;
             // vec3 backEmission = min(backCol.rgb * backCol.a * _BackTexBrightness, myImageEmission);
             // vec3 foreEmission = foreCol.rgb * foreCol.a * _ForegroundTexBrightness, backEmission;
-            o.Emission = myImage.rgb * myImage.a * _MainTexBrightness;
+            o.Emission = myImage.rgb * myImage.a * _SubjectBrightness;
             // o.Emission += min(backCol.rgb * backCol.a * _BackTexBrightness, o.Emission);
             o.Emission.r = max(o.Emission.r, backCol.r * backCol.a * _BackTexBrightness); //This is scuffed, please fix later. adapt that composite function
             o.Emission.g = max(o.Emission.g, backCol.g * backCol.a * _BackTexBrightness);
             o.Emission.b = max(o.Emission.b, backCol.b * backCol.a * _BackTexBrightness);
             o.Emission += foreCol.rgb * foreCol.a * _ForegroundTexBrightness; 
+            // _MainTexCol.a/=2.0; //reduce alpha influence to lessen emission cutout
+            // _MainTexCol _FrontImageBrightness;
+            // fixed4 subtractEmission = DrawAoverB(_MainTexCol, 1, fixed4(o.Emission, 1), 1);
+            // fixed4 subtractEmission2 = BooleanIntersect(_MainTexCol, fixed4(o.Emission, 1));
+            fixed3 subtractEmission2 = DrawEmissionAoverB(_MainTexCol.rgb* _MainTexCol.a * _FrontImageBrightness,1.0, o.Emission, 1.0);
+
+            // o.Emission = subtractEmission.rgb;
+            o.Emission = subtractEmission2;
+            // o.Emission = fixed3(0,0,0); //temp disable emission
             // Metallic and smoothness come from slider variables
             o.Metallic = _Metallic;
             o.Smoothness = _Glossiness;
