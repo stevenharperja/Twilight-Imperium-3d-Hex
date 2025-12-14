@@ -148,13 +148,15 @@ Shader "Custom/BasicParallax"
             result.r += wave * 0.1;
             return result;
         }
-        fixed4 holographicEffect(fixed4 image, Input IN, float frequency = 10.0, float amplitude = 0.1)
+        fixed4 holographicEffect(fixed4 image, Input IN, float frequency = 10.0, float amplitude = 0.1, float3 norm = (1,1,1))
         {
             //See if I can use the info from here: https://www.cyanilux.com/tutorials/holofoil-card-shader-breakdown/
             //get the view direction
             float3 viewDir = normalize(IN.viewDir);
             //calculate a holographic color shift based on view direction
-            float shift = dot(viewDir, float3(1,1,1));
+            // float shift = dot(viewDir, float3(1,1,1));
+            norm = float3(norm.z, norm.y,norm.x);
+            float shift = dot(viewDir.xy, norm);
             //filter the shift through a high frequency sine wave for a holographic effect
             float Rshift = sin(shift * frequency) * amplitude;
             float Gshift = sin((shift) * frequency + 0.33*2*3.14) * amplitude;
@@ -207,8 +209,8 @@ Shader "Custom/BasicParallax"
         void surf (Input IN, inout SurfaceOutputStandard o)
         {
             ////FIX UVS
-            //magic number because all the pokemon cards are the same size
-            float stretch = 1.75;
+            //magic number because all the mtg cards are the same size
+            float stretch = 1;
             stretchVertically(IN.uv_Subject, stretch);
             stretchVertically(IN.uv_BackTex, stretch);
             stretchVertically(IN.uv_ForegroundTex, stretch);
@@ -229,7 +231,7 @@ Shader "Custom/BasicParallax"
             float2 parallaxtwo = ParallaxOffset(d, _ParallaxTwo, IN.viewDir);
             fixed4 myImage = tex2D (_Subject, IN.uv_Subject*_SpriteScale + parallaxtwo) * _Color;
             // myImage = holographicEffect(myImage, IN, 10.0, 0.05);
-            myImage = holographicEffect(myImage, IN, _SubjectShininessFrequency, _SubjectShininessAmplitude);
+            myImage = holographicEffect(myImage, IN, _SubjectShininessFrequency, _SubjectShininessAmplitude, o.Normal);
 
             // Back texture parallax and sample
             float2 parallaxBack = ParallaxOffset(d, _BackParallax, IN.viewDir);
@@ -241,9 +243,12 @@ Shader "Custom/BasicParallax"
             foreCol = holographicEffect(foreCol, IN, _ForegroundShininessFrequency, _ForegroundShininessAmplitude);
 
             // Composite fore (top) over front over back using opacities and alphas
-            fixed4 result = CompositeColors(myImage, backCol, _BackOpacity, foreCol, _ForegroundOpacity);
+            // fixed4 result = CompositeColors(myImage, backCol, _BackOpacity, foreCol, _ForegroundOpacity);
+            fixed4 result;
             fixed4 _MainTexCol = tex2D(_MainTex, IN.uv_MainTex);
-            result = DrawAoverB(_MainTexCol, 1.0, result, 1.0);
+            result = DrawAoverB(_MainTexCol, 1.0, backCol, _BackOpacity);
+            result = DrawAoverB(foreCol, _ForegroundOpacity, result, 1.0);
+            result = DrawAoverB(myImage, 1.0, result, 1.0);
 
             o.Albedo = result.rgb;
             // vec3 myImageEmission = myImage.rgb * myImage.a * _SubjectBrightness;
@@ -261,11 +266,7 @@ Shader "Custom/BasicParallax"
             // _MainTexCol _FrontImageBrightness;
             // fixed4 subtractEmission = DrawAoverB(_MainTexCol, 1, fixed4(o.Emission, 1), 1);
             // fixed4 subtractEmission2 = BooleanIntersect(_MainTexCol, fixed4(o.Emission, 1));
-            fixed3 subtractEmission2 = DrawEmissionAoverB(_MainTexCol.rgb* _MainTexCol.a * _FrontImageBrightness,1.0, o.Emission, 1.0);
-
-            // o.Emission = subtractEmission.rgb;
-            o.Emission = subtractEmission2;
-            // o.Emission = fixed3(0,0,0); //temp disable emission
+            o.Emission = DrawEmissionAoverB(_MainTexCol.rgb* _MainTexCol.a * _FrontImageBrightness,1.0, o.Emission, 1.0);
             // Metallic and smoothness come from slider variables
             o.Metallic = _Metallic;
             o.Smoothness = _Glossiness;
